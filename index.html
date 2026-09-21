@@ -1820,8 +1820,10 @@ function closePres() {
 }
 
 function extractChords(text) {
+  const sectionRe = /^(버스|코러스|브릿지|verse|chorus|bridge|intro|outro)/i
   const seen = new Set(), result = []
   for (const m of text.matchAll(/\[([^\]]+)\]/g)) {
+    if (sectionRe.test(m[1].trim())) continue
     if (!seen.has(m[1])) { seen.add(m[1]); result.push(m[1]) }
   }
   return result
