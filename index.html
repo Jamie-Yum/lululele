@@ -1003,12 +1003,36 @@ a{color:var(--accent)}
   <div class="sfv-header">
     <button class="back-btn" onclick="closeSheetFv()">←</button>
     <h2 id="sfv-title">악보</h2>
+    <button id="sfv-edit-btn" onclick="openEditSheet()" style="display:none;font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;cursor:pointer;color:var(--text);white-space:nowrap;flex-shrink:0">✏️ 수정</button>
     <button id="sfv-pres-btn" onclick="openPresMode()" style="display:none;font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;cursor:pointer;color:var(--text);white-space:nowrap;flex-shrink:0">⊞ 한 화면</button>
     <a id="sfv-dl" href="#" target="_blank" style="font-size:12px;color:var(--muted);text-decoration:none;white-space:nowrap;flex-shrink:0">열기↗</a>
+  </div>
+  <div id="sfv-inst-row" style="display:none;padding:6px 14px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;gap:6px">
+    <button class="inst-btn active" id="sfv-inst-guitar" onclick="switchSfvInst('guitar')">🎸 기타</button>
+    <button class="inst-btn" id="sfv-inst-ukulele" onclick="switchSfvInst('ukulele')">🪕 우쿨렐레</button>
   </div>
   <div class="sfv-body">
     <div class="sfv-chord-bar" id="sfv-chord-bar"></div>
     <div class="sfv-content" id="sfv-content"></div>
+  </div>
+</div>
+
+<!-- EDIT SHEET MODAL -->
+<div class="modal-ov" id="edit-sheet-modal" style="display:none" onclick="if(event.target===this)closeEditSheet()">
+  <div class="modal-sheet">
+    <h3>악보 수정</h3>
+    <div class="form-row">
+      <label>제목</label>
+      <input type="text" id="edit-sheet-title">
+    </div>
+    <div class="form-row">
+      <label>코드+가사</label>
+      <textarea id="edit-sheet-text" rows="10" style="font-family:monospace;font-size:13px"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <button class="btn btn-secondary" style="flex:1" onclick="closeEditSheet()">취소</button>
+      <button class="btn btn-primary" style="flex:2" onclick="saveEditSheet()">저장</button>
+    </div>
   </div>
 </div>
 
@@ -1664,6 +1688,11 @@ async function uploadSheet() {
 function openSheet(idx) {
   const sheet = S.sheets[idx]
   if (!sheet) return
+  sfvCurrentSheet = sheet
+  sfvCurrentSheet._idx = idx
+  sfvInstrument = 'guitar'
+  document.getElementById('sfv-inst-guitar').classList.add('active')
+  document.getElementById('sfv-inst-ukulele').classList.remove('active')
   document.getElementById('sfv-title').textContent = sheet.file_name
   const fv = document.getElementById('sheet-fv')
   fv.classList.add('open')
@@ -1671,18 +1700,24 @@ function openSheet(idx) {
   const chordBar = document.getElementById('sfv-chord-bar')
   const content = document.getElementById('sfv-content')
   const dlBtn = document.getElementById('sfv-dl')
+  const editBtn = document.getElementById('sfv-edit-btn')
+  const instRow = document.getElementById('sfv-inst-row')
 
   const manualChords = sheet.key_chords ? sheet.key_chords.trim().split(/\s+/).filter(Boolean) : []
   const presBtn = document.getElementById('sfv-pres-btn')
   presBtn.style.display = 'none'
   if (sheet.file_type === 'chord-lyric') {
     dlBtn.style.display = 'none'
+    instRow.style.display = 'flex'
+    editBtn.style.display = sheet.user_id === currentUser?.id ? '' : 'none'
     chordBar.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:4px">불러오는 중…</div>'
     content.innerHTML = ''
     fetch(sb.fileUrl(sheet.storage_path))
       .then(r => r.text())
       .then(text => {
+        sfvCurrentSheet._text = text
         const chords = manualChords.length ? manualChords : extractChords(text)
+        sfvCurrentSheet._cachedChords = chords
         renderChordBar(chords)
         content.innerHTML = renderChordLyric(text)
         presText = text; presChords = chords
@@ -1691,6 +1726,8 @@ function openSheet(idx) {
       })
       .catch(() => { content.innerHTML = '<div class="empty">불러오기 실패</div>'; chordBar.innerHTML = '' })
   } else {
+    instRow.style.display = 'none'
+    editBtn.style.display = 'none'
     renderChordBar(manualChords)
     const url = sb.fileUrl(sheet.storage_path)
     dlBtn.href = url; dlBtn.style.display = ''
@@ -1708,6 +1745,40 @@ function closeSheetFv() {
   document.getElementById('sfv-content').innerHTML = ''
   document.getElementById('sfv-chord-bar').innerHTML = ''
   document.getElementById('sfv-pres-btn').style.display = 'none'
+  document.getElementById('sfv-edit-btn').style.display = 'none'
+  document.getElementById('sfv-inst-row').style.display = 'none'
+  sfvCurrentSheet = null
+}
+
+function openEditSheet() {
+  if (!sfvCurrentSheet) return
+  document.getElementById('edit-sheet-title').value = sfvCurrentSheet.file_name
+  document.getElementById('edit-sheet-text').value = sfvCurrentSheet._text || ''
+  document.getElementById('edit-sheet-modal').style.display = 'flex'
+}
+function closeEditSheet() {
+  document.getElementById('edit-sheet-modal').style.display = 'none'
+}
+async function saveEditSheet() {
+  const title = document.getElementById('edit-sheet-title').value.trim() || sfvCurrentSheet.file_name
+  const text = document.getElementById('edit-sheet-text').value.trim()
+  if (!text) return
+  const blob = new Blob([text], { type: 'text/plain' })
+  const path = `${Date.now()}_cl.txt`
+  const ok = await sb.upload(path, blob)
+  if (!ok) { alert('저장 실패'); return }
+  await sb.patch('ssw_sheet_music', sfvCurrentSheet.id, { file_name: title, storage_path: path })
+  closeEditSheet()
+  sfvCurrentSheet.file_name = title
+  sfvCurrentSheet._text = text
+  sfvCurrentSheet.storage_path = path
+  document.getElementById('sfv-title').textContent = title
+  const chords = extractChords(text)
+  sfvCurrentSheet._cachedChords = chords
+  renderChordBar(chords)
+  document.getElementById('sfv-content').innerHTML = renderChordLyric(text)
+  presText = text; presChords = chords; presTitle = title
+  await loadSheets()
 }
 
 let presText = '', presChords = [], presTitle = ''
@@ -1740,8 +1811,22 @@ function renderChordBar(chords) {
   bar.innerHTML = chords.map(name => miniChordEl(name)).join('')
 }
 
+let sfvInstrument = 'guitar'
+let sfvCurrentSheet = null
+
+function switchSfvInst(inst) {
+  sfvInstrument = inst
+  document.getElementById('sfv-inst-guitar').classList.toggle('active', inst === 'guitar')
+  document.getElementById('sfv-inst-ukulele').classList.toggle('active', inst === 'ukulele')
+  if (sfvCurrentSheet) {
+    const chords = sfvCurrentSheet._cachedChords || []
+    renderChordBar(chords)
+  }
+}
+
 function miniChordEl(name) {
-  const shapes = CHORD_DB[name]
+  const db = sfvInstrument === 'guitar' ? CHORD_DB : UKE_CHORD_DB
+  const shapes = db[name]
   if (!shapes || !shapes.length) return `<div class="mini-chord-lbl">${name}</div>`
   const sh = shapes[0], frets = sh.frets, sf = sh.startFret || 1
   const NS = 6, NF = 4
