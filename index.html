@@ -1848,26 +1848,26 @@ function miniChordEl(name) {
 
   // 가로 레이아웃: 너트=왼쪽, 바디=오른쪽, 위(저음줄)=위, 아래(고음줄)=아래
   const ss = 10, fs = 14
-  const ML = 18, MR = 8, MT = 20, MB = 6
+  const ML = 14, MR = 16, MT = 20, MB = 6
   const W = ML + NF * fs + MR
   const H = MT + (NS - 1) * ss + MB
   const xNut = ML
+  const xEnd = xNut + NF * fs
 
   let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
 
   // 제목
   s += `<text x="${W/2}" y="12" text-anchor="middle" fill="var(--text)" font-size="10" font-weight="700">${name}</text>`
 
-  // 줄 선 + 줄 이름 + 위/아래 라벨
-  // i=0(저음E/G)가 화면 아래, i=NS-1(고음e/A)이 화면 위
+  // 줄 선 + 줄 이름(왼쪽) + 위/아래 라벨(오른쪽 끝)
   for (let i = 0; i < NS; i++) {
     const y = MT + (NS - 1 - i) * ss
     const isBot = i === 0        // 저음줄(위) → 화면 아래
     const isTop = i === NS - 1   // 고음줄(아래) → 화면 위
-    s += `<text x="${xNut - 4}" y="${y + 3}" text-anchor="end" fill="var(--muted)" font-size="6.5">${strNames[i]}</text>`
-    if (isBot) s += `<text x="2" y="${y + 3}" text-anchor="start" fill="var(--accent)" font-size="6" font-weight="700">위</text>`
-    if (isTop) s += `<text x="2" y="${y + 3}" text-anchor="start" fill="var(--muted)" font-size="6">아래</text>`
-    s += `<line x1="${xNut}" y1="${y}" x2="${xNut + NF*fs}" y2="${y}" stroke="var(--text)" stroke-width="${isTop || isBot ? 1.6 : 1.1}" opacity="${isTop || isBot ? 0.6 : 0.4}"/>`
+    s += `<text x="${xNut - 3}" y="${y + 3}" text-anchor="end" fill="var(--muted)" font-size="6.5">${strNames[i]}</text>`
+    if (isBot) s += `<text x="${xEnd + 3}" y="${y + 3}" text-anchor="start" fill="var(--accent)" font-size="6" font-weight="700">위</text>`
+    if (isTop) s += `<text x="${xEnd + 3}" y="${y + 3}" text-anchor="start" fill="var(--muted)" font-size="6">아래</text>`
+    s += `<line x1="${xNut}" y1="${y}" x2="${xEnd}" y2="${y}" stroke="var(--text)" stroke-width="${isTop || isBot ? 1.6 : 1.1}" opacity="${isTop || isBot ? 0.6 : 0.4}"/>`
   }
 
   // 프렛 와이어 (세로선, 너트 오른쪽부터)
@@ -2632,10 +2632,11 @@ function chordSVG(chord) {
   const strNames = NS === 4 ? ['G','C','E','A'] : ['E','A','D','G','B','e']
   const sf = chord.startFret || 1
   const ss = 10, fs = 14
-  const ML = 16, MR = 6, MT = 4, MB = 4
+  const ML = 12, MR = 6, MT = 4, MB = 4
   const W = ML + NF * fs + MR
   const H = MT + (NS - 1) * ss + MB
   const xNut = ML
+  const xEnd = xNut + NF * fs
 
   let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg">`
 
@@ -2644,7 +2645,7 @@ function chordSVG(chord) {
     const y = MT + (NS - 1 - i) * ss
     const isEdge = i === 0 || i === NS - 1
     s += `<text x="${xNut - 3}" y="${y + 3}" text-anchor="end" fill="var(--muted)" font-size="6">${strNames[i]}</text>`
-    s += `<line x1="${xNut}" y1="${y}" x2="${xNut + NF*fs}" y2="${y}" stroke="var(--text)" stroke-width="${isEdge ? 1.5 : 1}" opacity="${isEdge ? 0.55 : 0.35}"/>`
+    s += `<line x1="${xNut}" y1="${y}" x2="${xEnd}" y2="${y}" stroke="var(--text)" stroke-width="${isEdge ? 1.5 : 1}" opacity="${isEdge ? 0.55 : 0.35}"/>`
   }
 
   // 프렛 와이어
