@@ -1859,15 +1859,14 @@ function miniChordEl(name) {
   s += `<text x="${W/2}" y="12" text-anchor="middle" fill="var(--text)" font-size="10" font-weight="700">${name}</text>`
 
   // 줄 선 + 줄 이름 + 위/아래 라벨
+  // i=0(저음E/G)가 화면 아래, i=NS-1(고음e/A)이 화면 위
   for (let i = 0; i < NS; i++) {
-    const y = MT + i * ss
-    const isTop = i === 0, isBot = i === NS - 1
-    // 줄 이름 (너트 왼쪽)
+    const y = MT + (NS - 1 - i) * ss
+    const isBot = i === 0        // 저음줄(위) → 화면 아래
+    const isTop = i === NS - 1   // 고음줄(아래) → 화면 위
     s += `<text x="${xNut - 4}" y="${y + 3}" text-anchor="end" fill="var(--muted)" font-size="6.5">${strNames[i]}</text>`
-    // 위/아래 라벨 (맨 왼쪽)
-    if (isTop)  s += `<text x="2" y="${y + 3}" text-anchor="start" fill="var(--accent)" font-size="6" font-weight="700">위</text>`
-    if (isBot)  s += `<text x="2" y="${y + 3}" text-anchor="start" fill="var(--muted)" font-size="6">아래</text>`
-    // 줄 선
+    if (isBot) s += `<text x="2" y="${y + 3}" text-anchor="start" fill="var(--accent)" font-size="6" font-weight="700">위</text>`
+    if (isTop) s += `<text x="2" y="${y + 3}" text-anchor="start" fill="var(--muted)" font-size="6">아래</text>`
     s += `<line x1="${xNut}" y1="${y}" x2="${xNut + NF*fs}" y2="${y}" stroke="var(--text)" stroke-width="${isTop || isBot ? 1.6 : 1.1}" opacity="${isTop || isBot ? 0.6 : 0.4}"/>`
   }
 
@@ -1885,16 +1884,18 @@ function miniChordEl(name) {
     s += `<text x="${xNut + 2}" y="${MT - 3}" text-anchor="start" fill="var(--muted)" font-size="7">${sf}fr</text>`
   }
 
-  // 바레 (세로 바)
+  // 바레 (세로 바) - y좌표 반전 적용
   if (sh.barre) {
     const { fret, from, to } = sh.barre
     const xB = xNut + (fret - sf + 0.5) * fs
-    s += `<rect x="${xB - fs*0.18}" y="${MT + from*ss}" width="${fs*0.36}" height="${(to-from)*ss}" fill="var(--accent)" rx="${fs*0.18}" opacity="0.85"/>`
+    const y1 = MT + (NS - 1 - to) * ss
+    const y2 = MT + (NS - 1 - from) * ss
+    s += `<rect x="${xB - fs*0.18}" y="${y1}" width="${fs*0.36}" height="${y2 - y1}" fill="var(--accent)" rx="${fs*0.18}" opacity="0.85"/>`
   }
 
-  // 손가락 위치 + 뮤트/오픈
+  // 손가락 위치 + 뮤트/오픈 - y좌표 반전 적용
   for (let i = 0; i < NS; i++) {
-    const y = MT + i * ss, f = frets[i]
+    const y = MT + (NS - 1 - i) * ss, f = frets[i]
     if (f === -1) {
       s += `<text x="${xNut - 9}" y="${y + 3.5}" text-anchor="middle" fill="var(--muted)" font-size="9">×</text>`
     } else if (f === 0) {
