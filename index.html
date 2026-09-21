@@ -1844,54 +1844,51 @@ function miniChordEl(name) {
   const sh = shapes[0], frets = sh.frets, sf = sh.startFret || 1
   const isUke = sfvInstrument === 'ukulele'
   const NS = isUke ? 4 : 6, NF = 4
-  // 줄 이름: 인덱스 0 = 저음(위), 마지막 = 고음(아래)
   const strNames = isUke ? ['G','C','E','A'] : ['E','A','D','G','B','e']
 
-  // 90° CCW 회전 레이아웃
-  // 가로 = 프렛 방향 (오른쪽=너트, 왼쪽=바디)
-  // 세로 = 줄 방향 (위=저음줄, 아래=고음줄)
+  // 가로 레이아웃: 너트=왼쪽, 바디=오른쪽, 위(저음줄)=위, 아래(고음줄)=아래
   const ss = 10, fs = 14
-  const ML = 18, MR = 16, MT = 20, MB = 6
+  const ML = 18, MR = 8, MT = 20, MB = 6
   const W = ML + NF * fs + MR
   const H = MT + (NS - 1) * ss + MB
-  const xNut = ML + NF * fs
+  const xNut = ML
 
   let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
 
   // 제목
   s += `<text x="${W/2}" y="12" text-anchor="middle" fill="var(--text)" font-size="10" font-weight="700">${name}</text>`
 
-  // 줄 이름 + 위/아래 라벨 + 줄 선
+  // 줄 선 + 줄 이름 + 위/아래 라벨
   for (let i = 0; i < NS; i++) {
     const y = MT + i * ss
     const isTop = i === 0, isBot = i === NS - 1
-    // 줄 이름 (왼쪽)
-    s += `<text x="${ML - 4}" y="${y + 3}" text-anchor="end" fill="var(--muted)" font-size="6.5">${strNames[i]}</text>`
-    // 위/아래 라벨
-    if (isTop)  s += `<text x="3" y="${y + 3}" text-anchor="start" fill="var(--accent)" font-size="6" font-weight="700">위</text>`
-    if (isBot)  s += `<text x="3" y="${y + 3}" text-anchor="start" fill="var(--muted)" font-size="6">아래</text>`
-    // 줄 선 (저음줄/고음줄 더 진하게)
-    s += `<line x1="${ML}" y1="${y}" x2="${xNut}" y2="${y}" stroke="var(--text)" stroke-width="${isTop || isBot ? 1.6 : 1.1}" opacity="${isTop || isBot ? 0.6 : 0.4}"/>`
+    // 줄 이름 (너트 왼쪽)
+    s += `<text x="${xNut - 4}" y="${y + 3}" text-anchor="end" fill="var(--muted)" font-size="6.5">${strNames[i]}</text>`
+    // 위/아래 라벨 (맨 왼쪽)
+    if (isTop)  s += `<text x="2" y="${y + 3}" text-anchor="start" fill="var(--accent)" font-size="6" font-weight="700">위</text>`
+    if (isBot)  s += `<text x="2" y="${y + 3}" text-anchor="start" fill="var(--muted)" font-size="6">아래</text>`
+    // 줄 선
+    s += `<line x1="${xNut}" y1="${y}" x2="${xNut + NF*fs}" y2="${y}" stroke="var(--text)" stroke-width="${isTop || isBot ? 1.6 : 1.1}" opacity="${isTop || isBot ? 0.6 : 0.4}"/>`
   }
 
-  // 프렛 와이어 (세로선)
-  for (let k = 0; k < NF; k++) {
-    const x = ML + k * fs
+  // 프렛 와이어 (세로선, 너트 오른쪽부터)
+  for (let k = 1; k <= NF; k++) {
+    const x = xNut + k * fs
     s += `<line x1="${x}" y1="${MT}" x2="${x}" y2="${MT + (NS-1)*ss}" stroke="var(--text)" stroke-width="0.8" opacity="0.2"/>`
   }
 
-  // 너트 or 포지션 마커 (오른쪽)
+  // 너트 (왼쪽, 두꺼운 세로 바)
   if (sf <= 1) {
     s += `<rect x="${xNut - 1.5}" y="${MT}" width="3.5" height="${(NS-1)*ss}" fill="var(--text)" opacity="0.75" rx="1"/>`
   } else {
     s += `<line x1="${xNut}" y1="${MT}" x2="${xNut}" y2="${MT+(NS-1)*ss}" stroke="var(--text)" stroke-width="1" opacity="0.4"/>`
-    s += `<text x="${xNut - 2}" y="${MT - 3}" text-anchor="end" fill="var(--muted)" font-size="7">${sf}fr</text>`
+    s += `<text x="${xNut + 2}" y="${MT - 3}" text-anchor="start" fill="var(--muted)" font-size="7">${sf}fr</text>`
   }
 
   // 바레 (세로 바)
   if (sh.barre) {
     const { fret, from, to } = sh.barre
-    const xB = xNut - (fret - sf + 0.5) * fs
+    const xB = xNut + (fret - sf + 0.5) * fs
     s += `<rect x="${xB - fs*0.18}" y="${MT + from*ss}" width="${fs*0.36}" height="${(to-from)*ss}" fill="var(--accent)" rx="${fs*0.18}" opacity="0.85"/>`
   }
 
@@ -1899,11 +1896,11 @@ function miniChordEl(name) {
   for (let i = 0; i < NS; i++) {
     const y = MT + i * ss, f = frets[i]
     if (f === -1) {
-      s += `<text x="${xNut + 8}" y="${y + 3.5}" text-anchor="middle" fill="var(--muted)" font-size="9">×</text>`
+      s += `<text x="${xNut - 9}" y="${y + 3.5}" text-anchor="middle" fill="var(--muted)" font-size="9">×</text>`
     } else if (f === 0) {
-      s += `<circle cx="${xNut + 8}" cy="${y}" r="3" fill="none" stroke="var(--muted)" stroke-width="1.2"/>`
+      s += `<circle cx="${xNut - 9}" cy="${y}" r="3" fill="none" stroke="var(--muted)" stroke-width="1.2"/>`
     } else {
-      const xPos = xNut - (f - sf + 0.5) * fs
+      const xPos = xNut + (f - sf + 0.5) * fs
       if (!sh.barre || f !== sh.barre.fret || i < sh.barre.from || i > sh.barre.to)
         s += `<circle cx="${xPos}" cy="${y}" r="${ss * 0.32}" fill="var(--accent)"/>`
     }
