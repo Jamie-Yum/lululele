@@ -1004,6 +1004,7 @@ a{color:var(--accent)}
     <button class="back-btn" onclick="closeSheetFv()">←</button>
     <h2 id="sfv-title">악보</h2>
     <button id="sfv-edit-btn" onclick="openEditSheet()" style="display:none;font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;cursor:pointer;color:var(--text);white-space:nowrap;flex-shrink:0">✏️ 수정</button>
+    <button id="sfv-del-btn" onclick="deleteSheet()" style="display:none;font-size:12px;background:none;border:none;padding:4px 6px;cursor:pointer;color:var(--danger);white-space:nowrap;flex-shrink:0">🗑</button>
     <button id="sfv-pres-btn" onclick="openPresMode()" style="display:none;font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;cursor:pointer;color:var(--text);white-space:nowrap;flex-shrink:0">⊞ 한 화면</button>
     <a id="sfv-dl" href="#" target="_blank" style="font-size:12px;color:var(--muted);text-decoration:none;white-space:nowrap;flex-shrink:0">열기↗</a>
   </div>
@@ -1709,7 +1710,9 @@ function openSheet(idx) {
   if (sheet.file_type === 'chord-lyric') {
     dlBtn.style.display = 'none'
     instRow.style.display = 'flex'
-    editBtn.style.display = sheet.user_id === currentUser?.id ? '' : 'none'
+    const isOwn = sheet.user_id === currentUser?.id
+    editBtn.style.display = isOwn ? '' : 'none'
+    document.getElementById('sfv-del-btn').style.display = isOwn ? '' : 'none'
     chordBar.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:4px">불러오는 중…</div>'
     content.innerHTML = ''
     fetch(sb.fileUrl(sheet.storage_path))
@@ -1728,6 +1731,7 @@ function openSheet(idx) {
   } else {
     instRow.style.display = 'none'
     editBtn.style.display = 'none'
+    document.getElementById('sfv-del-btn').style.display = sheet.user_id === currentUser?.id ? '' : 'none'
     renderChordBar(manualChords)
     const url = sb.fileUrl(sheet.storage_path)
     dlBtn.href = url; dlBtn.style.display = ''
@@ -1746,8 +1750,17 @@ function closeSheetFv() {
   document.getElementById('sfv-chord-bar').innerHTML = ''
   document.getElementById('sfv-pres-btn').style.display = 'none'
   document.getElementById('sfv-edit-btn').style.display = 'none'
+  document.getElementById('sfv-del-btn').style.display = 'none'
   document.getElementById('sfv-inst-row').style.display = 'none'
   sfvCurrentSheet = null
+}
+
+async function deleteSheet() {
+  if (!sfvCurrentSheet) return
+  if (!confirm(`"${sfvCurrentSheet.file_name}" 악보를 삭제할까요?`)) return
+  await sb.del('ssw_sheet_music', sfvCurrentSheet.id)
+  closeSheetFv()
+  loadSheets()
 }
 
 function openEditSheet() {
