@@ -1842,7 +1842,7 @@ function miniChordEl(name) {
   const shapes = db[name]
   if (!shapes || !shapes.length) return `<div class="mini-chord-lbl">${name}</div>`
   const sh = shapes[0], frets = sh.frets, sf = sh.startFret || 1
-  const NS = 6, NF = 4
+  const NS = sfvInstrument === 'ukulele' ? 4 : 6, NF = 4
   const W = 54, H = 70, ML = 9, MT = 18
   const ss = (W - ML*2) / (NS-1), fs = (H - MT - 7) / NF
   let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
