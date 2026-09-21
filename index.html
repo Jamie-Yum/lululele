@@ -1029,7 +1029,11 @@ a{color:var(--accent)}
       <label>코드+가사</label>
       <textarea id="edit-sheet-text" rows="10" style="font-family:monospace;font-size:13px"></textarea>
     </div>
-    <div style="display:flex;gap:8px;margin-top:6px">
+    <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;margin-top:6px">
+      <input type="checkbox" id="edit-sheet-public" style="width:16px;height:16px">
+      🌐 공개 (다른 사람도 볼 수 있어요)
+    </label>
+    <div style="display:flex;gap:8px;margin-top:10px">
       <button class="btn btn-secondary" style="flex:1" onclick="closeEditSheet()">취소</button>
       <button class="btn btn-primary" style="flex:2" onclick="saveEditSheet()">저장</button>
     </div>
@@ -1768,6 +1772,7 @@ function openEditSheet() {
   if (!sfvCurrentSheet) return
   document.getElementById('edit-sheet-title').value = sfvCurrentSheet.file_name
   document.getElementById('edit-sheet-text').value = sfvCurrentSheet._text || ''
+  document.getElementById('edit-sheet-public').checked = !!sfvCurrentSheet.is_public
   document.getElementById('edit-sheet-modal').style.display = 'flex'
 }
 function closeEditSheet() {
@@ -1781,11 +1786,13 @@ async function saveEditSheet() {
   const path = `${Date.now()}_cl.txt`
   const ok = await sb.upload(path, blob)
   if (!ok) { alert('저장 실패'); return }
-  await sb.patch('ssw_sheet_music', sfvCurrentSheet.id, { file_name: title, storage_path: path })
+  const isPublic = document.getElementById('edit-sheet-public').checked
+  await sb.patch('ssw_sheet_music', sfvCurrentSheet.id, { file_name: title, storage_path: path, is_public: isPublic })
   closeEditSheet()
   sfvCurrentSheet.file_name = title
   sfvCurrentSheet._text = text
   sfvCurrentSheet.storage_path = path
+  sfvCurrentSheet.is_public = isPublic
   document.getElementById('sfv-title').textContent = title
   const chords = extractChords(text)
   sfvCurrentSheet._cachedChords = chords
