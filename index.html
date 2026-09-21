@@ -1762,6 +1762,7 @@ function openSheet(idx) {
   } else {
     instRow.style.display = 'none'
     editBtn.style.display = 'none'
+    renderStrumPattern(null)
     document.getElementById('sfv-del-btn').style.display = sheet.user_id === currentUser?.id ? '' : 'none'
     renderChordBar(manualChords)
     const url = sb.fileUrl(sheet.storage_path)
@@ -2296,6 +2297,7 @@ const STRUM_PATTERNS = [
 
 function renderStrumPattern(name) {
   const el = document.getElementById('sfv-strum')
+  if (!el) return
   if (!name) { el.innerHTML = ''; return }
   const p = STRUM_PATTERNS.find(x => x.name === name)
   if (!p) { el.innerHTML = ''; return }
