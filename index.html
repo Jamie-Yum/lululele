@@ -954,7 +954,14 @@ a{color:var(--accent)}
       <label>주요 코드 <span style="color:var(--muted);font-weight:400">(선택사항)</span></label>
       <input type="text" id="sheet-key-chords" placeholder="예: C Am F G  (띄어쓰기로 구분)">
     </div>
-    <div style="display:flex;gap:8px;margin-top:6px">
+    <div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding:10px 12px;background:var(--surface2);border-radius:10px;border:1px solid var(--border)">
+      <input type="checkbox" id="sheet-is-public" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0">
+      <div>
+        <div style="font-size:13px;font-weight:600">모두에게 공개</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:1px">다른 사용자도 이 악보를 볼 수 있어요</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
       <button class="btn btn-secondary" style="flex:1" onclick="closeUploadModal()">취소</button>
       <button class="btn btn-primary" style="flex:2" onclick="uploadSheet()">저장</button>
     </div>
@@ -1523,19 +1530,21 @@ async function saveVision() {
 
 // ─── SHEETS ──────────────────────────────────────────────────────────────────
 async function loadSheets() {
-  S.sheets = await sb.get('ssw_sheet_music', '')
+  S.sheets = await sb.get('ssw_sheet_music', `or=(user_id.eq.${currentUser.id},is_public.eq.true)`)
   const allSongs = await sb.get('ssw_songs', '')
   const songMap = Object.fromEntries(allSongs.map(s => [s.id, s.title]))
   const el = document.getElementById('sheets-grid')
   el.innerHTML = S.sheets.length
     ? S.sheets.map((s, idx) => {
         const icon = s.file_type === 'chord-lyric' ? '🎵' : s.file_type === 'link' ? '🔗' : s.file_name.toLowerCase().endsWith('.pdf') ? '📄' : '🖼️'
+        const isOther = s.user_id !== currentUser.id
         return `
       <div class="sheet-card" onclick="openSheet(${idx})">
         <div class="sheet-thumb">${icon}</div>
         <div class="sheet-meta">
           <div class="sheet-name">${esc(s.file_name)}</div>
           <div class="sheet-song">${s.song_id ? esc(songMap[s.song_id]||'') : '미분류'}</div>
+          ${s.is_public ? `<div style="font-size:10px;color:var(--accent);margin-top:3px">${isOther ? '🌐 공유됨' : '🌐 공개중'}</div>` : ''}
         </div>
       </div>`
       }).join('')
@@ -1543,6 +1552,7 @@ async function loadSheets() {
 }
 
 async function showUploadModal() {
+  document.getElementById('sheet-is-public').checked = false
   const songs = await sb.get('ssw_songs', '')
   document.getElementById('sheet-song-sel').innerHTML =
     '<option value="">— 미분류 —</option>' +
@@ -1617,6 +1627,7 @@ function insertNewlineAtCursor() {
 async function uploadSheet() {
   const songId = document.getElementById('sheet-song-sel').value || null
   const keyChords = document.getElementById('sheet-key-chords').value.trim() || null
+  const isPublic = document.getElementById('sheet-is-public').checked
   if (uploadTab === 'chord-lyric') {
     const text = document.getElementById('sheet-cl-text').value.trim()
     const title = document.getElementById('sheet-cl-title').value.trim() || '코드+가사 악보'
@@ -1625,7 +1636,7 @@ async function uploadSheet() {
     const path = `${Date.now()}_cl.txt`
     const ok = await sb.upload(path, blob)
     if (!ok) { alert('저장에 실패했어요'); return }
-    await sb.post('ssw_sheet_music', { user_id: currentUser?.id, song_id: songId, file_name: title, storage_path: path, file_type: 'chord-lyric', key_chords: keyChords })
+    await sb.post('ssw_sheet_music', { user_id: currentUser?.id, song_id: songId, file_name: title, storage_path: path, file_type: 'chord-lyric', key_chords: keyChords, is_public: isPublic })
     document.getElementById('sheet-cl-text').value = ''
     document.getElementById('sheet-cl-title').value = ''
   } else if (uploadTab === 'url') {
@@ -1636,14 +1647,14 @@ async function uploadSheet() {
     const ext = name.split('.').pop().toLowerCase()
     const type = ['jpg','jpeg','png','gif','webp'].includes(ext) ? 'image/'+ext
       : ext === 'pdf' ? 'application/pdf' : 'link'
-    await sb.post('ssw_sheet_music', { user_id: currentUser?.id, song_id: songId, file_name: name, storage_path: url, file_type: type, key_chords: keyChords })
+    await sb.post('ssw_sheet_music', { user_id: currentUser?.id, song_id: songId, file_name: name, storage_path: url, file_type: type, key_chords: keyChords, is_public: isPublic })
   } else {
     const file = document.getElementById('sheet-file').files[0]
     if (!file) { alert('파일을 선택하세요'); return }
     const path = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`
     const ok = await sb.upload(path, file)
     if (!ok) { alert('업로드에 실패했어요. 파일 크기나 형식을 확인해주세요.'); return }
-    await sb.post('ssw_sheet_music', { user_id: currentUser?.id, song_id: songId, file_name: file.name, storage_path: path, file_type: file.type, key_chords: keyChords })
+    await sb.post('ssw_sheet_music', { user_id: currentUser?.id, song_id: songId, file_name: file.name, storage_path: path, file_type: file.type, key_chords: keyChords, is_public: isPublic })
     document.getElementById('sheet-file').value = ''
   }
   closeUploadModal(); loadSheets()
