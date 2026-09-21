@@ -469,14 +469,34 @@ a{color:var(--accent)}
   border-bottom:1px solid var(--border);background:var(--surface);
 }
 .sfv-chord-bar:empty{display:none}
+.sfv-left{display:flex;flex-direction:column;flex-shrink:0}
+.sfv-strum{flex-shrink:0;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--surface2)}
+.sfv-strum:empty{display:none}
+.strum-name{font-size:11px;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.strum-name b{color:var(--text);font-size:13px}
+.strum-grid{display:flex;gap:2px;flex-wrap:wrap}
+.strum-cell{display:flex;flex-direction:column;align-items:center;min-width:28px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 4px;gap:1px}
+.strum-cell .sc-beat{font-size:9px;color:var(--muted)}
+.strum-cell .sc-stroke{font-size:15px;line-height:1;font-weight:700}
+.strum-cell .sc-stroke.down{color:var(--accent)}
+.strum-cell .sc-stroke.up{color:#e07b3a}
+.strum-cell .sc-stroke.mute{color:var(--border);font-size:11px}
 .sfv-content{flex:1;overflow-y:auto;padding:20px 16px;min-height:0}
 @media (orientation:landscape){
   .sfv-body{flex-direction:row}
-  .sfv-chord-bar{
-    flex-direction:column;overflow-y:auto;overflow-x:hidden;
-    width:100px;border-bottom:none;border-right:1px solid var(--border);
-    padding:8px 4px;flex-shrink:0;align-items:center;gap:8px;
+  .sfv-left{
+    display:flex;flex-direction:column;width:110px;flex-shrink:0;
+    border-right:1px solid var(--border);overflow-y:auto;
   }
+  .sfv-chord-bar{
+    flex-direction:column;overflow-y:visible;overflow-x:hidden;
+    border-bottom:1px solid var(--border);
+    padding:8px 4px;align-items:center;gap:8px;
+  }
+  .sfv-chord-bar:empty{display:none}
+  .sfv-strum{border-bottom:none;padding:6px 4px}
+  .strum-grid{flex-direction:column;gap:3px}
+  .strum-cell{flex-direction:row;min-width:unset;width:100%;justify-content:flex-start;gap:6px}
   .sfv-content{padding:16px 20px}
 }
 .mini-chord{
@@ -1012,7 +1032,10 @@ a{color:var(--accent)}
     <button id="sfv-chord-toggle" onclick="toggleChordBar()" style="margin-left:auto;font-size:11px;background:none;border:none;cursor:pointer;color:var(--muted);padding:2px 6px">코드 접기 ▲</button>
   </div>
   <div class="sfv-body">
-    <div class="sfv-chord-bar" id="sfv-chord-bar"></div>
+    <div class="sfv-left">
+      <div class="sfv-chord-bar" id="sfv-chord-bar"></div>
+      <div class="sfv-strum" id="sfv-strum"></div>
+    </div>
     <div class="sfv-content" id="sfv-content"></div>
   </div>
 </div>
@@ -1028,6 +1051,10 @@ a{color:var(--accent)}
     <div class="form-row">
       <label>코드+가사</label>
       <textarea id="edit-sheet-text" rows="10" style="font-family:monospace;font-size:13px"></textarea>
+    </div>
+    <div class="form-row">
+      <label>스트로크 패턴</label>
+      <div id="edit-strum-btns" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px"></div>
     </div>
     <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;margin-top:6px">
       <input type="checkbox" id="edit-sheet-public" style="width:16px;height:16px">
@@ -1718,6 +1745,7 @@ function openSheet(idx) {
     document.getElementById('sfv-del-btn').style.display = isOwn ? '' : 'none'
     chordBar.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:4px">불러오는 중…</div>'
     content.innerHTML = ''
+    renderStrumPattern(sheet.strum_pattern || null)
     fetch(sb.fileUrl(sheet.storage_path))
       .then(r => r.text())
       .then(text => {
@@ -1751,6 +1779,7 @@ function closeSheetFv() {
   document.body.style.overflow = ''
   document.getElementById('sfv-content').innerHTML = ''
   document.getElementById('sfv-chord-bar').innerHTML = ''
+  document.getElementById('sfv-strum').innerHTML = ''
   document.getElementById('sfv-pres-btn').style.display = 'none'
   document.getElementById('sfv-edit-btn').style.display = 'none'
   document.getElementById('sfv-del-btn').style.display = 'none'
@@ -1773,7 +1802,22 @@ function openEditSheet() {
   document.getElementById('edit-sheet-title').value = sfvCurrentSheet.file_name
   document.getElementById('edit-sheet-text').value = sfvCurrentSheet._text || ''
   document.getElementById('edit-sheet-public').checked = !!sfvCurrentSheet.is_public
+  const cur = sfvCurrentSheet.strum_pattern || ''
+  const btnWrap = document.getElementById('edit-strum-btns')
+  const btnStyle = 'font-size:12px;padding:4px 10px;border-radius:16px;border:1px solid var(--border);cursor:pointer;background:var(--surface)'
+  const btnActiveStyle = 'font-size:12px;padding:4px 10px;border-radius:16px;border:1px solid var(--accent);cursor:pointer;background:var(--accent);color:#fff'
+  btnWrap.innerHTML = [{ name: '없음' }, ...STRUM_PATTERNS].map(p => {
+    const isActive = p.name === (cur || '없음')
+    return `<button onclick="selectStrum(this,'${p.name}')" style="${isActive ? btnActiveStyle : btnStyle}">${p.name}</button>`
+  }).join('')
   document.getElementById('edit-sheet-modal').style.display = 'flex'
+}
+function selectStrum(btn, name) {
+  const btnStyle = 'font-size:12px;padding:4px 10px;border-radius:16px;border:1px solid var(--border);cursor:pointer;background:var(--surface)'
+  const btnActiveStyle = 'font-size:12px;padding:4px 10px;border-radius:16px;border:1px solid var(--accent);cursor:pointer;background:var(--accent);color:#fff'
+  btn.closest('#edit-strum-btns').querySelectorAll('button').forEach(b => b.setAttribute('style', btnStyle))
+  btn.setAttribute('style', btnActiveStyle)
+  btn.dataset.selected = name
 }
 function closeEditSheet() {
   document.getElementById('edit-sheet-modal').style.display = 'none'
@@ -1787,12 +1831,17 @@ async function saveEditSheet() {
   const ok = await sb.upload(path, blob)
   if (!ok) { alert('저장 실패'); return }
   const isPublic = document.getElementById('edit-sheet-public').checked
-  await sb.patch('ssw_sheet_music', sfvCurrentSheet.id, { file_name: title, storage_path: path, is_public: isPublic })
+  const strumBtns = document.getElementById('edit-strum-btns')
+  const selectedStrumBtn = strumBtns.querySelector('button[style*="var(--accent)"]')
+  const strumPattern = selectedStrumBtn ? (selectedStrumBtn.textContent === '없음' ? null : selectedStrumBtn.textContent) : (sfvCurrentSheet.strum_pattern || null)
+  await sb.patch('ssw_sheet_music', sfvCurrentSheet.id, { file_name: title, storage_path: path, is_public: isPublic, strum_pattern: strumPattern })
   closeEditSheet()
   sfvCurrentSheet.file_name = title
   sfvCurrentSheet._text = text
   sfvCurrentSheet.storage_path = path
   sfvCurrentSheet.is_public = isPublic
+  sfvCurrentSheet.strum_pattern = strumPattern
+  renderStrumPattern(strumPattern)
   document.getElementById('sfv-title').textContent = title
   const chords = extractChords(text)
   sfvCurrentSheet._cachedChords = chords
@@ -2232,6 +2281,33 @@ function playRef(freq, label, btn) {
   osc.start(); osc.stop(ctx.currentTime + 2)
   refOsc = osc; btn.classList.add('playing'); activeRefBtn = btn
   setTimeout(() => { btn.classList.remove('playing'); if (activeRefBtn === btn) activeRefBtn = null }, 2000)
+}
+
+// ─── STRUM PATTERNS ──────────────────────────────────────────────────────────
+const STRUM_PATTERNS = [
+  { name:'칼립소',   meter:'4/4', beats:['1','&','2','&','3','&','4','&'], strokes:['↓','·','↓↑','·','↑↓','·','↑','·'] },
+  { name:'8비트',    meter:'4/4', beats:['1','&','2','&','3','&','4','&'], strokes:['↓','↑','↓','↑','↓','↑','↓','↑'] },
+  { name:'16비트',   meter:'4/4', beats:['1','e','&','a','2','e','&','a','3','e','&','a','4','e','&','a'], strokes:['↓','↑','↓','↑','↓','↑','↓','↑','↓','↑','↓','↑','↓','↑','↓','↑'] },
+  { name:'왈츠',     meter:'3/4', beats:['1','2','3'],                    strokes:['↓','↑','↑'] },
+  { name:'포크',     meter:'4/4', beats:['1','&','2','&','3','&','4','&'], strokes:['↓','·','↓↑','·','↓↑','·','↑','·'] },
+  { name:'보사노바', meter:'4/4', beats:['1','&','2','&','3','&','4','&'], strokes:['↓','↑','·','↓','·','↑','↓','·'] },
+  { name:'슬로우록', meter:'4/4', beats:['1','&','2','&','3','&','4','&'], strokes:['↓','·','↓↑','↑↓','·','↑↓','↑','·'] },
+]
+
+function renderStrumPattern(name) {
+  const el = document.getElementById('sfv-strum')
+  if (!name) { el.innerHTML = ''; return }
+  const p = STRUM_PATTERNS.find(x => x.name === name)
+  if (!p) { el.innerHTML = ''; return }
+  const cells = p.beats.map((b, i) => {
+    const s = p.strokes[i] || '·'
+    const isMute = s === '·'
+    const hasDown = s.includes('↓')
+    const hasUp = s.includes('↑')
+    const cls = isMute ? 'mute' : (hasDown && hasUp) ? 'down' : hasDown ? 'down' : 'up'
+    return `<div class="strum-cell"><span class="sc-beat">${b}</span><span class="sc-stroke ${cls}">${s}</span></div>`
+  }).join('')
+  el.innerHTML = `<div class="strum-name"><b>${p.name}</b><span>${p.meter}</span></div><div class="strum-grid">${cells}</div>`
 }
 
 // ─── CHORDS ──────────────────────────────────────────────────────────────────
