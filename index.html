@@ -481,6 +481,14 @@ a{color:var(--accent)}
 .strum-cell .sc-stroke.down{color:var(--accent)}
 .strum-cell .sc-stroke.up{color:#e07b3a}
 .strum-cell .sc-stroke.mute{color:var(--border);font-size:11px}
+.strum-cell.active{background:var(--accent);border-color:var(--accent)}
+.strum-cell.active .sc-beat{color:rgba(255,255,255,.7)}
+.strum-cell.active .sc-stroke{color:#fff!important}
+.strum-play-btn{margin-left:auto;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:2px 10px;font-size:12px;cursor:pointer;color:var(--text);transition:background .15s}
+.strum-play-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.strum-play-btn.playing{background:var(--accent);color:#fff;border-color:var(--accent)}
+.strum-bpm{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px}
+.strum-bpm input{width:44px;padding:1px 4px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:11px;text-align:center}
 .sfv-content{flex:1;overflow-y:auto;padding:20px 16px;min-height:0}
 @media (orientation:landscape){
   .sfv-body{flex-direction:row}
@@ -2284,6 +2292,86 @@ function playRef(freq, label, btn) {
   setTimeout(() => { btn.classList.remove('playing'); if (activeRefBtn === btn) activeRefBtn = null }, 2000)
 }
 
+// ─── STRUM AUDIO ─────────────────────────────────────────────────────────────
+let _strumCtx = null
+let _strumSources = []
+let _strumTimer = null
+let _strumPlaying = false
+let _strumBpm = 80
+
+function _getCtx() {
+  if (!_strumCtx) _strumCtx = new (window.AudioContext || window.webkitAudioContext)()
+  if (_strumCtx.state === 'suspended') _strumCtx.resume()
+  return _strumCtx
+}
+
+function _playNote(stroke, time, ctx) {
+  if (stroke === '·') return
+  const hasDown = stroke.includes('↓')
+  const hasUp   = stroke.includes('↑')
+  const dur = hasDown && hasUp ? 0.12 : 0.09
+  const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate)
+  const d   = buf.getChannelData(0)
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/d.length, 1.8)
+  const src = ctx.createBufferSource()
+  src.buffer = buf
+  const filt = ctx.createBiquadFilter()
+  if (hasDown && !hasUp) { filt.type='lowpass';  filt.frequency.value=700 }
+  else if (!hasDown)     { filt.type='highpass'; filt.frequency.value=1200 }
+  else                   { filt.type='bandpass'; filt.frequency.value=900; filt.Q.value=0.8 }
+  const gain = ctx.createGain()
+  gain.gain.value = hasDown ? 0.75 : 0.5
+  src.connect(filt); filt.connect(gain); gain.connect(ctx.destination)
+  src.start(time)
+  _strumSources.push(src)
+}
+
+function stopStrumPlayback() {
+  _strumPlaying = false
+  clearTimeout(_strumTimer)
+  _strumSources.forEach(s => { try { s.stop() } catch(e){} })
+  _strumSources = []
+  const btn = document.getElementById('strum-play-btn')
+  if (btn) { btn.textContent = '▶'; btn.classList.remove('playing') }
+}
+
+function playStrumPattern(name) {
+  if (_strumPlaying) { stopStrumPlayback(); return }
+  const p = STRUM_PATTERNS.find(x => x.name === name)
+  if (!p) return
+  const ctx = _getCtx()
+  _strumPlaying = true
+  _strumSources = []
+  const btn = document.getElementById('strum-play-btn')
+  if (btn) { btn.textContent = '⏹'; btn.classList.add('playing') }
+
+  const is16 = p.beats.some(b => b === 'e' || b === 'a')
+  const beatSec = is16 ? 60/_strumBpm/4 : 60/_strumBpm/2
+  const loopSec = p.beats.length * beatSec
+  const now = ctx.currentTime + 0.05
+  const loops = 2
+
+  for (let lp = 0; lp < loops; lp++) {
+    p.strokes.forEach((stroke, i) => _playNote(stroke, now + lp*loopSec + i*beatSec, ctx))
+  }
+
+  const cells = document.querySelectorAll('#sfv-strum .strum-cell')
+  let tick = 0
+  const totalTicks = p.beats.length * loops
+  function highlight() {
+    cells.forEach(c => c.classList.remove('active'))
+    const idx = tick % p.beats.length
+    if (cells[idx]) cells[idx].classList.add('active')
+    tick++
+    if (tick < totalTicks) {
+      _strumTimer = setTimeout(highlight, beatSec * 1000)
+    } else {
+      _strumTimer = setTimeout(() => { stopStrumPlayback() }, beatSec * 1000)
+    }
+  }
+  _strumTimer = setTimeout(highlight, now * 1000 - ctx.currentTime * 1000)
+}
+
 // ─── STRUM PATTERNS ──────────────────────────────────────────────────────────
 const STRUM_PATTERNS = [
   { name:'칼립소',   meter:'4/4', beats:['1','&','2','&','3','&','4','&'], strokes:['↓','·','↓','↑','·','↑','↓','↑'] },
@@ -2306,10 +2394,16 @@ function renderStrumPattern(name) {
     const isMute = s === '·'
     const hasDown = s.includes('↓')
     const hasUp = s.includes('↑')
-    const cls = isMute ? 'mute' : (hasDown && hasUp) ? 'down' : hasDown ? 'down' : 'up'
+    const cls = isMute ? 'mute' : hasDown ? 'down' : 'up'
     return `<div class="strum-cell"><span class="sc-beat">${b}</span><span class="sc-stroke ${cls}">${s}</span></div>`
   }).join('')
-  el.innerHTML = `<div class="strum-name"><b>${p.name}</b><span>${p.meter}</span></div><div class="strum-grid">${cells}</div>`
+  el.innerHTML = `
+    <div class="strum-name">
+      <b>${p.name}</b><span>${p.meter}</span>
+      <span class="strum-bpm">BPM<input id="strum-bpm-input" type="number" min="40" max="200" value="${_strumBpm}" onchange="_strumBpm=+this.value"></span>
+      <button id="strum-play-btn" class="strum-play-btn" onclick="playStrumPattern('${p.name}')">▶</button>
+    </div>
+    <div class="strum-grid">${cells}</div>`
 }
 
 // ─── CHORDS ──────────────────────────────────────────────────────────────────
