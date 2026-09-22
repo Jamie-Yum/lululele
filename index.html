@@ -587,6 +587,31 @@ a{color:var(--accent)}
 }
 .modal-sheet h3{font-size:16px;font-weight:700;margin-bottom:18px}
 
+/* VISUAL CHORD EDITOR */
+.edit-tabs{display:flex;gap:6px;margin-bottom:10px}
+.edit-tab{padding:5px 14px;border-radius:16px;border:1px solid var(--border);background:var(--surface);font-size:12px;color:var(--muted);cursor:pointer;font-family:inherit}
+.edit-tab.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
+.edit-kc-area{margin-bottom:10px}
+.edit-kc-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:500;margin-bottom:6px}
+.edit-kc-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;min-height:28px}
+.kc-tag{display:flex;align-items:center;gap:4px;padding:3px 6px 3px 10px;border-radius:16px;background:var(--accent);color:#fff;font-size:13px;font-weight:600}
+.kc-tag button{background:none;border:none;color:#fff;opacity:.75;font-size:15px;padding:0;cursor:pointer;line-height:1}
+.edit-kc-input-row{display:flex;gap:6px;align-items:center}
+.edit-visual-editor{border:1px solid var(--border);border-radius:8px;padding:10px 12px;min-height:100px;overflow-y:auto;max-height:38vh;cursor:default;background:var(--surface2)}
+.ve-section-header{font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;padding:6px 0 3px;margin-top:4px}
+.ve-empty-line{height:10px}
+.ve-line{display:flex;flex-wrap:wrap;gap:4px 2px;align-items:flex-end;padding:4px 0}
+.ve-token{display:inline-flex;flex-direction:column;align-items:center;cursor:pointer;padding:3px 5px;border-radius:6px;border:1px solid transparent;transition:background .1s,border-color .1s;min-width:28px}
+.ve-token:hover{background:var(--surface);border-color:var(--border)}
+.ve-token.has-chord{background:var(--accent-glow);border-color:rgba(124,109,249,.3)}
+.ve-chord-badge{font-size:10px;font-weight:700;color:var(--accent);min-height:14px;line-height:14px;white-space:nowrap}
+.ve-word{font-size:14px;color:var(--text);white-space:nowrap}
+.ve-word:empty::after{content:'◇';color:var(--muted);font-size:11px}
+.chord-picker-popup{position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px;display:flex;flex-wrap:wrap;gap:6px;z-index:500;box-shadow:0 4px 24px rgba(0,0,0,.25);max-width:240px}
+.chord-picker-popup button{padding:4px 10px;border-radius:8px;font-size:13px;font-weight:600;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;font-family:inherit}
+.chord-picker-popup button:hover{border-color:var(--accent);background:var(--accent-glow)}
+.chord-picker-popup .cp-remove{color:var(--muted);font-weight:400;font-size:12px}
+
 /* LOG ITEMS */
 .log-item{padding:10px 0;border-bottom:1px solid var(--border)}
 .log-item:last-child{border-bottom:none}
@@ -1056,10 +1081,20 @@ a{color:var(--accent)}
       <label>제목</label>
       <input type="text" id="edit-sheet-title">
     </div>
-    <div class="form-row">
-      <label>코드+가사</label>
-      <textarea id="edit-sheet-text" rows="10" style="font-family:monospace;font-size:13px"></textarea>
+    <div class="edit-tabs">
+      <button class="edit-tab active" id="edit-tab-visual" onclick="switchEditTab('visual')">🎵 비주얼</button>
+      <button class="edit-tab" id="edit-tab-raw" onclick="switchEditTab('raw')">📝 텍스트</button>
     </div>
+    <div id="edit-kc-area" class="edit-kc-area">
+      <div class="edit-kc-label">코드 팔레트</div>
+      <div class="edit-kc-tags" id="edit-kc-tags"></div>
+      <div class="edit-kc-input-row">
+        <input type="text" id="edit-kc-input" placeholder="코드 추가 (예: Am)" style="flex:1;height:32px;font-size:13px;width:auto" onkeydown="if(event.key==='Enter'){addKeyChordFromInput();event.preventDefault()}">
+        <button onclick="addKeyChordFromInput()" style="padding:0 12px;height:32px;font-size:13px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;font-family:inherit">+</button>
+      </div>
+    </div>
+    <div id="edit-visual-editor" class="edit-visual-editor" style="margin-bottom:12px"></div>
+    <textarea id="edit-sheet-text" rows="10" style="font-family:monospace;font-size:13px;display:none;margin-bottom:12px"></textarea>
     <div class="form-row">
       <label>스트로크 패턴</label>
       <div id="edit-strum-btns" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px"></div>
@@ -1074,6 +1109,9 @@ a{color:var(--accent)}
     </div>
   </div>
 </div>
+
+<!-- CHORD PICKER POPUP -->
+<div id="chord-picker-popup" class="chord-picker-popup" style="display:none"></div>
 
 <!-- PRESENTATION MODE -->
 <div id="pres-ov">
@@ -1806,11 +1844,182 @@ async function deleteSheet() {
   loadSheets()
 }
 
+// ─── VISUAL CHORD EDITOR ─────────────────────────────────────────────────────
+let editLineData = []
+let editKeyChords = []
+let editActiveTab = 'visual'
+let editPickerTarget = null
+
+function veEsc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+
+function parseLyricTokens(line) {
+  if (!/\[/.test(line)) {
+    return line.split(' ').filter(w => w !== '').map(w => ({ chord: null, text: w }))
+  }
+  const tokens = []
+  const firstBracket = line.indexOf('[')
+  if (firstBracket > 0) {
+    for (const w of line.slice(0, firstBracket).split(' ').filter(Boolean)) tokens.push({ chord: null, text: w })
+  }
+  for (const m of line.matchAll(/\[([^\]]+)\]([^\[]*)/g)) {
+    const chord = m[1], words = (m[2] || '').split(' ')
+    let assigned = false
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i]
+      if (!assigned) { tokens.push({ chord, text: w }); assigned = true }
+      else if (w !== '') tokens.push({ chord: null, text: w })
+    }
+    if (!assigned) tokens.push({ chord, text: '' })
+  }
+  return tokens.filter(t => t.text !== '' || t.chord !== null)
+}
+
+function parseToEditorLines(text) {
+  const secRe = /^\[(버스|코러스|브릿지|verse|chorus|bridge|intro|outro|pre.?chorus|interlude)[^\]]*\]$/i
+  return text.split('\n').map(raw => {
+    const t = raw.trimEnd().trim()
+    if (!t) return { type: 'empty' }
+    if (t.startsWith('#') || secRe.test(t)) {
+      return { type: 'section', title: t.startsWith('#') ? t.slice(1).trim() : t.slice(1, -1) }
+    }
+    return { type: 'lyric', tokens: parseLyricTokens(t) }
+  })
+}
+
+function serializeTokens(tokens) {
+  return tokens.map((tok, i) => {
+    if (tok.chord) return (i > 0 ? ' ' : '') + `[${tok.chord}]${tok.text}`
+    return (i > 0 ? ' ' : '') + tok.text
+  }).join('')
+}
+
+function serializeEditorLines(lines) {
+  return lines.map(l => {
+    if (l.type === 'section') return `[${l.title}]`
+    if (l.type === 'empty') return ''
+    return serializeTokens(l.tokens)
+  }).join('\n')
+}
+
+function renderVisualEditor() {
+  const el = document.getElementById('edit-visual-editor')
+  let html = ''
+  editLineData.forEach((line, li) => {
+    if (line.type === 'section') {
+      html += `<div class="ve-section-header">${veEsc(line.title)}</div>`
+    } else if (line.type === 'empty') {
+      html += `<div class="ve-empty-line"></div>`
+    } else if (line.type === 'lyric') {
+      html += `<div class="ve-line">`
+      line.tokens.forEach((tok, ti) => {
+        const cls = tok.chord ? 've-token has-chord' : 've-token'
+        html += `<div class="${cls}" onclick="clickVeToken(event,${li},${ti})">`
+        html += `<div class="ve-chord-badge">${tok.chord ? veEsc(tok.chord) : ''}</div>`
+        html += `<div class="ve-word">${veEsc(tok.text)}</div>`
+        html += `</div>`
+      })
+      html += `</div>`
+    }
+  })
+  el.innerHTML = html || `<div style="color:var(--muted);font-size:13px">가사를 텍스트 탭에서 먼저 입력하세요</div>`
+}
+
+function renderKeyChords() {
+  document.getElementById('edit-kc-tags').innerHTML = editKeyChords.map((c, i) =>
+    `<div class="kc-tag">${veEsc(c)}<button onclick="removeKeyChord(${i})">×</button></div>`
+  ).join('')
+}
+
+function addKeyChordFromInput() {
+  const inp = document.getElementById('edit-kc-input')
+  const val = inp.value.trim()
+  if (!val || editKeyChords.includes(val)) { inp.value = ''; return }
+  editKeyChords.push(val)
+  renderKeyChords()
+  inp.value = ''
+  inp.focus()
+}
+
+function removeKeyChord(idx) {
+  editKeyChords.splice(idx, 1)
+  renderKeyChords()
+}
+
+function clickVeToken(e, li, ti) {
+  e.stopPropagation()
+  editPickerTarget = { li, ti }
+  const popup = document.getElementById('chord-picker-popup')
+  let html = editKeyChords.map(c =>
+    `<button onclick="pickChord('${c.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">${veEsc(c)}</button>`
+  ).join('')
+  html += `<button class="cp-remove" onclick="pickChord(null)">없음</button>`
+  popup.innerHTML = html
+  popup.style.display = 'flex'
+  const rect = e.currentTarget.getBoundingClientRect()
+  let left = rect.left, top = rect.bottom + 6
+  if (left + 240 > window.innerWidth) left = window.innerWidth - 248
+  if (left < 4) left = 4
+  popup.style.left = left + 'px'
+  popup.style.top = top + 'px'
+}
+
+function pickChord(chord) {
+  if (editPickerTarget) {
+    const { li, ti } = editPickerTarget
+    if (editLineData[li]?.tokens?.[ti]) editLineData[li].tokens[ti].chord = chord
+    editPickerTarget = null
+  }
+  document.getElementById('chord-picker-popup').style.display = 'none'
+  renderVisualEditor()
+}
+
+function switchEditTab(tab) {
+  editActiveTab = tab
+  if (tab === 'visual') {
+    const raw = document.getElementById('edit-sheet-text').value
+    if (raw.trim()) editLineData = parseToEditorLines(raw)
+    renderVisualEditor()
+    document.getElementById('edit-visual-editor').style.display = ''
+    document.getElementById('edit-kc-area').style.display = ''
+    document.getElementById('edit-sheet-text').style.display = 'none'
+  } else {
+    document.getElementById('edit-sheet-text').value = serializeEditorLines(editLineData)
+    document.getElementById('edit-visual-editor').style.display = 'none'
+    document.getElementById('edit-kc-area').style.display = 'none'
+    document.getElementById('edit-sheet-text').style.display = ''
+  }
+  document.getElementById('edit-tab-visual').classList.toggle('active', tab === 'visual')
+  document.getElementById('edit-tab-raw').classList.toggle('active', tab === 'raw')
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#chord-picker-popup') && !e.target.closest('.ve-token')) {
+    document.getElementById('chord-picker-popup').style.display = 'none'
+  }
+})
+
 function openEditSheet() {
   if (!sfvCurrentSheet) return
   document.getElementById('edit-sheet-title').value = sfvCurrentSheet.file_name
-  document.getElementById('edit-sheet-text').value = sfvCurrentSheet._text || ''
   document.getElementById('edit-sheet-public').checked = !!sfvCurrentSheet.is_public
+
+  const rawText = sfvCurrentSheet._text || ''
+  document.getElementById('edit-sheet-text').value = rawText
+
+  const kcStr = sfvCurrentSheet.key_chords || ''
+  editKeyChords = kcStr ? kcStr.trim().split(/\s+/).filter(Boolean) : extractChords(rawText)
+  editLineData = parseToEditorLines(rawText)
+
+  editActiveTab = 'visual'
+  document.getElementById('edit-visual-editor').style.display = ''
+  document.getElementById('edit-kc-area').style.display = ''
+  document.getElementById('edit-sheet-text').style.display = 'none'
+  document.getElementById('edit-tab-visual').classList.add('active')
+  document.getElementById('edit-tab-raw').classList.remove('active')
+
+  renderKeyChords()
+  renderVisualEditor()
+
   const cur = sfvCurrentSheet.strum_pattern || ''
   const btnWrap = document.getElementById('edit-strum-btns')
   const btnStyle = 'font-size:12px;padding:4px 10px;border-radius:16px;border:1px solid var(--border);cursor:pointer;background:var(--surface)'
@@ -1833,7 +2042,7 @@ function closeEditSheet() {
 }
 async function saveEditSheet() {
   const title = document.getElementById('edit-sheet-title').value.trim() || sfvCurrentSheet.file_name
-  const text = document.getElementById('edit-sheet-text').value.trim()
+  const text = (editActiveTab === 'visual' ? serializeEditorLines(editLineData) : document.getElementById('edit-sheet-text').value).trim()
   if (!text) return
   const blob = new Blob([text], { type: 'text/plain' })
   const path = `${Date.now()}_cl.txt`
@@ -1843,13 +2052,15 @@ async function saveEditSheet() {
   const strumBtns = document.getElementById('edit-strum-btns')
   const selectedStrumBtn = strumBtns.querySelector('button[style*="var(--accent)"]')
   const strumPattern = selectedStrumBtn ? (selectedStrumBtn.textContent === '없음' ? null : selectedStrumBtn.textContent) : (sfvCurrentSheet.strum_pattern || null)
-  await sb.patch('ssw_sheet_music', sfvCurrentSheet.id, { file_name: title, storage_path: path, is_public: isPublic, strum_pattern: strumPattern })
+  const keyChords = editKeyChords.length ? editKeyChords.join(' ') : null
+  await sb.patch('ssw_sheet_music', sfvCurrentSheet.id, { file_name: title, storage_path: path, is_public: isPublic, strum_pattern: strumPattern, key_chords: keyChords })
   closeEditSheet()
   sfvCurrentSheet.file_name = title
   sfvCurrentSheet._text = text
   sfvCurrentSheet.storage_path = path
   sfvCurrentSheet.is_public = isPublic
   sfvCurrentSheet.strum_pattern = strumPattern
+  sfvCurrentSheet.key_chords = keyChords
   renderStrumPattern(strumPattern)
   document.getElementById('sfv-title').textContent = title
   const chords = extractChords(text)
