@@ -1057,12 +1057,18 @@ a{color:var(--accent)}
     <button id="sfv-edit-btn" onclick="openEditSheet()" style="display:none;font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;cursor:pointer;color:var(--text);white-space:nowrap;flex-shrink:0">✏️ 수정</button>
     <button id="sfv-del-btn" onclick="deleteSheet()" style="display:none;font-size:12px;background:none;border:none;padding:4px 6px;cursor:pointer;color:var(--danger);white-space:nowrap;flex-shrink:0">🗑</button>
     <button id="sfv-pres-btn" onclick="openPresMode()" style="display:none;font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;cursor:pointer;color:var(--text);white-space:nowrap;flex-shrink:0">⊞ 한 화면</button>
+    <button id="sfv-yt-btn" onclick="toggleYtPanel()" style="display:none;font-size:12px;background:#ff0000;border:none;border-radius:8px;padding:4px 10px;cursor:pointer;color:#fff;white-space:nowrap;flex-shrink:0">▶ 영상</button>
     <a id="sfv-dl" href="#" target="_blank" style="font-size:12px;color:var(--muted);text-decoration:none;white-space:nowrap;flex-shrink:0">열기↗</a>
   </div>
   <div id="sfv-inst-row" style="display:none;padding:6px 14px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;gap:6px;align-items:center">
     <button class="inst-btn active" id="sfv-inst-guitar" onclick="switchSfvInst('guitar')">🎸 기타</button>
     <button class="inst-btn" id="sfv-inst-ukulele" onclick="switchSfvInst('ukulele')">🪕 우쿨렐레</button>
     <button id="sfv-chord-toggle" onclick="toggleChordBar()" style="margin-left:auto;font-size:11px;background:none;border:none;cursor:pointer;color:var(--muted);padding:2px 6px">코드 접기 ▲</button>
+  </div>
+  <div id="sfv-yt-panel" style="display:none;flex-shrink:0;background:#000;position:relative">
+    <div style="position:relative;padding-bottom:56.25%;height:0">
+      <iframe id="sfv-yt-iframe" style="position:absolute;top:0;left:0;width:100%;height:100%" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+    </div>
   </div>
   <div class="sfv-body">
     <div class="sfv-left">
@@ -1098,6 +1104,10 @@ a{color:var(--accent)}
     <div class="form-row">
       <label>스트로크 패턴</label>
       <div id="edit-strum-btns" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px"></div>
+    </div>
+    <div class="form-row">
+      <label>유튜브 연습 영상 URL</label>
+      <input type="url" id="edit-youtube-url" placeholder="https://youtu.be/... 또는 youtube.com/watch?v=...">
     </div>
     <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;margin-top:6px">
       <input type="checkbox" id="edit-sheet-public" style="width:16px;height:16px">
@@ -1803,12 +1813,14 @@ function openSheet(idx) {
         presText = text; presChords = chords
         presTitle = sheet.file_name
         presBtn.style.display = ''
+        updateYtBtn(sheet.youtube_url)
       })
       .catch(() => { content.innerHTML = '<div class="empty">불러오기 실패</div>'; chordBar.innerHTML = '' })
   } else {
     instRow.style.display = 'none'
     editBtn.style.display = 'none'
     renderStrumPattern(null)
+    updateYtBtn(sheet.youtube_url)
     document.getElementById('sfv-del-btn').style.display = sheet.user_id === currentUser?.id ? '' : 'none'
     renderChordBar(manualChords)
     const url = sb.fileUrl(sheet.storage_path)
@@ -1821,6 +1833,37 @@ function openSheet(idx) {
   }
 }
 
+function extractYtId(url) {
+  if (!url) return null
+  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/))([A-Za-z0-9_-]{11})/)
+  return m ? m[1] : null
+}
+
+function updateYtBtn(url) {
+  const btn = document.getElementById('sfv-yt-btn')
+  const ytId = extractYtId(url)
+  btn.style.display = ytId ? '' : 'none'
+  if (!ytId) {
+    document.getElementById('sfv-yt-panel').style.display = 'none'
+    document.getElementById('sfv-yt-iframe').src = ''
+  }
+}
+
+let ytPanelOpen = false
+function toggleYtPanel() {
+  const panel = document.getElementById('sfv-yt-panel')
+  const iframe = document.getElementById('sfv-yt-iframe')
+  ytPanelOpen = !ytPanelOpen
+  if (ytPanelOpen) {
+    const ytId = extractYtId(sfvCurrentSheet?.youtube_url)
+    if (ytId) iframe.src = `https://www.youtube.com/embed/${ytId}?autoplay=1`
+    panel.style.display = ''
+  } else {
+    iframe.src = ''
+    panel.style.display = 'none'
+  }
+}
+
 function closeSheetFv() {
   document.getElementById('sheet-fv').classList.remove('open')
   document.body.style.overflow = ''
@@ -1830,9 +1873,13 @@ function closeSheetFv() {
   document.getElementById('sfv-pres-btn').style.display = 'none'
   document.getElementById('sfv-edit-btn').style.display = 'none'
   document.getElementById('sfv-del-btn').style.display = 'none'
+  document.getElementById('sfv-yt-btn').style.display = 'none'
+  document.getElementById('sfv-yt-panel').style.display = 'none'
+  document.getElementById('sfv-yt-iframe').src = ''
   document.getElementById('sfv-inst-row').style.display = 'none'
   document.getElementById('sfv-chord-bar').style.display = ''
   document.getElementById('sfv-chord-toggle').textContent = '코드 접기 ▲'
+  ytPanelOpen = false
   sfvCurrentSheet = null
 }
 
@@ -2002,6 +2049,7 @@ function openEditSheet() {
   if (!sfvCurrentSheet) return
   document.getElementById('edit-sheet-title').value = sfvCurrentSheet.file_name
   document.getElementById('edit-sheet-public').checked = !!sfvCurrentSheet.is_public
+  document.getElementById('edit-youtube-url').value = sfvCurrentSheet.youtube_url || ''
 
   const rawText = sfvCurrentSheet._text || ''
   document.getElementById('edit-sheet-text').value = rawText
@@ -2053,7 +2101,8 @@ async function saveEditSheet() {
   const selectedStrumBtn = strumBtns.querySelector('button[style*="var(--accent)"]')
   const strumPattern = selectedStrumBtn ? (selectedStrumBtn.textContent === '없음' ? null : selectedStrumBtn.textContent) : (sfvCurrentSheet.strum_pattern || null)
   const keyChords = editKeyChords.length ? editKeyChords.join(' ') : null
-  await sb.patch('ssw_sheet_music', sfvCurrentSheet.id, { file_name: title, storage_path: path, is_public: isPublic, strum_pattern: strumPattern, key_chords: keyChords })
+  const youtubeUrl = document.getElementById('edit-youtube-url').value.trim() || null
+  await sb.patch('ssw_sheet_music', sfvCurrentSheet.id, { file_name: title, storage_path: path, is_public: isPublic, strum_pattern: strumPattern, key_chords: keyChords, youtube_url: youtubeUrl })
   closeEditSheet()
   sfvCurrentSheet.file_name = title
   sfvCurrentSheet._text = text
@@ -2061,6 +2110,8 @@ async function saveEditSheet() {
   sfvCurrentSheet.is_public = isPublic
   sfvCurrentSheet.strum_pattern = strumPattern
   sfvCurrentSheet.key_chords = keyChords
+  sfvCurrentSheet.youtube_url = youtubeUrl
+  updateYtBtn(youtubeUrl)
   renderStrumPattern(strumPattern)
   document.getElementById('sfv-title').textContent = title
   const chords = extractChords(text)
